@@ -1,1 +1,86 @@
-<!doctype html><title>Arrivo</title>Arrivo phone</title>
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes"><meta name="theme-color" content="#16110E">
+<title>Arrivo</title><meta name="apple-mobile-web-app-title" content="Arrivo"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><link rel="apple-touch-icon" href="apple-touch-icon.png">
+<style>
+:root{color-scheme:light dark;--bg:#16110E;--card:#241c17;--ink:#f3ede4;--mut:#a89c8c;--gold:#C8A96A;--ok:#7ec27e;--bad:#e07a6a}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.4 -apple-system,system-ui,sans-serif;padding:env(safe-area-inset-top) 14px 40px}
+h1{font-size:22px;margin:16px 0 2px;letter-spacing:.04em}.mut{color:var(--mut);font-size:14px}
+.tabs{display:flex;gap:8px;margin:14px 0}.tabs button,.btn{flex:1;background:var(--card);color:var(--ink);border:1px solid #3a2f27;border-radius:12px;padding:12px;font-size:16px}
+.tabs button.on{background:var(--gold);color:#16110E;border-color:var(--gold);font-weight:600}.btn.main{background:var(--gold);color:#16110E;font-weight:600;border:0;width:100%;padding:16px;margin:10px 0}
+input[type=search]{width:100%;padding:14px;border-radius:12px;border:1px solid #3a2f27;background:var(--card);color:var(--ink);font-size:18px}
+.card{background:var(--card);border-radius:14px;padding:14px;margin:10px 0}.ph{display:block;width:100%;max-height:340px;object-fit:contain;background:#fff;border-radius:10px;margin-bottom:10px}.row{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.code{font-weight:600;font-size:18px}.tag{font-size:13px;padding:2px 8px;border-radius:99px;background:#3a2f27;color:var(--mut)}
+.ok{color:var(--ok)}.bad{color:var(--bad)}.warn{background:#4a3b1f;color:#f1d38a;padding:10px;border-radius:12px;margin:10px 0;font-size:15px}
+.sizes{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:10px}.sz{background:#1c1612;border-radius:10px;text-align:center;padding:8px 2px}.sz b{display:block;font-size:20px}.sz span{font-size:13px;color:var(--mut)}.sz.zero b{color:#6b5f52}
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}.chips button{border:1px solid #3a2f27;background:var(--card);color:var(--ink);border-radius:99px;padding:8px 14px;font-size:15px}.chips button.on{background:var(--gold);color:#16110E;border-color:var(--gold)}
+.hide{display:none}.small{font-size:14px;color:var(--mut)}
+</style></head><body>
+<h1>ARRIVO</h1><div class="mut" id="stamp">No stock loaded yet</div>
+<div id="warn"></div>
+<div id="empty" class="card"><p>To start, choose the phone file that Arrivo saved in your OneDrive / Google Drive folder (<b>arrivo-phone.json</b>).</p><button class="btn main" id="pick1">Choose the phone file</button></div>
+<div id="app" class="hide">
+ <div class="tabs"><button id="t1" class="on">Item</button><button id="t2">Stock</button></div>
+ <div id="p1"><input type="search" id="q" placeholder="Item code, e.g. 1791 or 0020-1791G" autocomplete="off" autocapitalize="characters" enterkeyhint="search"><div id="res"></div></div>
+ <div id="p2" class="hide"><div class="chips" id="lines"></div><div class="chips"><button id="instock" class="on">In stock only</button></div><div class="mut" id="sum"></div><div id="list"></div></div>
+ <button class="btn" id="pick2" style="margin-top:18px;width:100%">Load a newer file</button>
+</div>
+<input type="file" id="file" accept=".json,application/json" class="hide">
+<script>
+(function(){
+var KEY='arrivo-phone-data',SIZES=['S','M','L','XL','XXL','3XL','4XL','5XL'],data=null,line='',onlyStock=true;
+function $(i){return document.getElementById(i)}
+function load(){try{var t=localStorage.getItem(KEY);return t?JSON.parse(t):null}catch(e){return null}}
+function save(d){try{localStorage.setItem(KEY,JSON.stringify(d))}catch(e){}}
+function el(tag,cls,text){var e=document.createElement(tag);if(cls)e.className=cls;if(text!==undefined)e.textContent=text;return e}
+function ago(iso){var h=(Date.now()-new Date(iso).getTime())/36e5;return h<1?'less than an hour ago':h<24?Math.round(h)+' h ago':Math.round(h/24)+' day(s) ago'}
+function show(){
+  $('empty').classList.toggle('hide',!!data);$('app').classList.toggle('hide',!data);
+  if(!data)return;
+  var d=new Date(data.madeAt);$('stamp').textContent='Stock as of '+d.toLocaleString()+' ('+ago(data.madeAt)+')';
+  $('warn').innerHTML='';var days=(Date.now()-d.getTime())/864e5;
+  if(days>2){$('warn').appendChild(el('div','warn','This stock is '+Math.round(days)+' days old. Load a newer file to be sure.'))}
+  var ls=[];data.items.forEach(function(i){if(ls.indexOf(i.line)<0)ls.push(i.line)});ls.sort();
+  var c=$('lines');c.innerHTML='';[''].concat(ls).forEach(function(l){var b=el('button',l===line?'on':'',l||'All');b.onclick=function(){line=l;show();renderList()};c.appendChild(b)});
+  renderRes();renderList();
+}
+function sizesGrid(i){var g=el('div','sizes');SIZES.forEach(function(s){var n=i.sizes[s]||0;if(!n&&s!=='S'&&s!=='M'&&s!=='L'&&s!=='XL'&&s!=='XXL'&&!hasBig(i))return;var d=el('div','sz'+(n?'':' zero'));d.appendChild(el('b','',String(n)));d.appendChild(el('span','',s));g.appendChild(d)});return g}
+function hasBig(i){return i.line==='G'||['3XL','4XL','5XL'].some(function(s){return (i.sizes[s]||0)>0})}
+function card(i,detail){
+  var c=el('div','card');if(i.photo){var im=el('img','ph');im.src=i.photo;im.alt=i.code;c.appendChild(im)}var r=el('div','row');r.appendChild(el('div','code',i.code));
+  var t=el('div','code '+(i.total>0?'ok':'bad'),i.total>0?i.total+' in stock':'Out of stock');r.appendChild(t);c.appendChild(r);
+  var info=[i.colour,i.pattern,i.weave,i.collar].filter(Boolean).join(' · ');if(info)c.appendChild(el('div','small',info));
+  if(i.status==='disabled')c.appendChild(el('div','small','Disabled in Arrivo'));
+  c.appendChild(sizesGrid(i));
+  if(detail){var ic=Object.keys(i.itemCodes||{});if(ic.length){c.appendChild(el('div','small','Item codes: '+SIZES.filter(function(s){return i.itemCodes[s]}).map(function(s){return s+' '+i.itemCodes[s]}).join(' · ')))}c.appendChild(el('div','small','Price '+i.price+' '+(data.currency||'')))}
+  return c}
+function norm(s){return s.toUpperCase().replace(/\s+/g,'')}
+function renderRes(){
+  var q=norm($('q').value),box=$('res');box.innerHTML='';if(!data)return;
+  if(!q){box.appendChild(el('div','small','Type part of an item code. Example: 1791'));return}
+  var m=data.items.filter(function(i){var c=norm(i.code);return c.indexOf(q)>=0||c.replace(/^0+/,'').indexOf(q.replace(/^0+/,''))>=0});
+  if(!m.length){box.appendChild(el('div','card','No item with this code. Nothing is guessed: check the code and try again.'));return}
+  m.slice(0,15).forEach(function(i){box.appendChild(card(i,true))});
+  if(m.length>15)box.appendChild(el('div','small',(m.length-15)+' more. Type more of the code.'));
+}
+function renderList(){
+  var box=$('list');box.innerHTML='';if(!data)return;
+  var m=data.items.filter(function(i){return i.status==='active'&&(!line||i.line===line)&&(!onlyStock||i.total>0)});
+  var pcs=m.reduce(function(n,i){return n+i.total},0);$('sum').textContent=m.length+' items · '+pcs+' pieces';
+  m.slice(0,200).forEach(function(i){box.appendChild(card(i,false))});
+  if(m.length>200)box.appendChild(el('div','small','Showing the first 200. Choose a line to narrow.'));
+}
+function tab(n){$('p1').classList.toggle('hide',n!==1);$('p2').classList.toggle('hide',n!==2);$('t1').className=n===1?'on':'';$('t2').className=n===2?'on':''}
+$('t1').onclick=function(){tab(1)};$('t2').onclick=function(){tab(2);renderList()};
+$('q').oninput=renderRes;
+$('instock').onclick=function(){onlyStock=!onlyStock;this.className=onlyStock?'on':'';renderList()};
+function pick(){$('file').value='';$('file').click()}
+$('pick1').onclick=pick;$('pick2').onclick=pick;
+$('file').onchange=function(){var f=this.files&&this.files[0];if(!f)return;var r=new FileReader();
+  r.onload=function(){try{var d=JSON.parse(r.result);if(d.kind!=='arrivo-phone'||!Array.isArray(d.items))throw 0;
+    if(data&&new Date(d.madeAt)<new Date(data.madeAt)&&!confirm('This file is OLDER than the stock already on the phone. Use it anyway?'))return;
+    data=d;save(d);show()}catch(e){alert('This is not an Arrivo phone file.')}};r.readAsText(f)};
+data=load();show();
+})();
+</script></body></html>
